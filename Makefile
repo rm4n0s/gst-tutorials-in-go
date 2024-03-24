@@ -6,3 +6,4 @@ build:
 	go build -o bin/3-basic-tutorial  3-basic-tutorial/main.go
 	go build -o bin/3-basic-exercise  3-basic-tutorial/exercise/main.go
 	go build -o bin/4-basic-tutorial  4-basic-tutorial/main.go
+	go build -o bin/6-basic-tutorial  6-basic-tutorial/main.go
