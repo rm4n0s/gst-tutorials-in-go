@@ -10,3 +10,5 @@ build:
 	go build -o bin/7-basic-tutorial  7-basic-tutorial/main.go
 
 	go build -o bin/fyne-webcam  examples/fyne-webcam/main.go
+	go build -o bin/webrtc-webcam  examples/webrtc-webcam/*.go
+	cp -r examples/webrtc-webcam/static bin/static
