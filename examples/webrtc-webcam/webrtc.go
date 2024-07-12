@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/go-gst/go-gst/gst"
 	"github.com/go-gst/go-gst/gst/app"
@@ -11,8 +12,13 @@ import (
 )
 
 type Webrtc struct {
-	OpusPipeline *gst.Pipeline
-	H264Pipeline *gst.Pipeline
+	opusPipeline *gst.Pipeline
+	h264Pipeline *gst.Pipeline
+	// peerConnection *webrtc.PeerConnection
+	// audioTrack     *webrtc.TrackLocalStaticSample
+	// videoTrack     *webrtc.TrackLocalStaticSample
+	// audioRtpSender *webrtc.RTPSender
+	// videoRtpSender *webrtc.RTPSender
 }
 
 func NewWebrtc() *Webrtc {
@@ -20,14 +26,12 @@ func NewWebrtc() *Webrtc {
 }
 
 func (wr *Webrtc) start(b64Offer string) string {
+
 	audioSrc := "alsasrc ! audioparse ! decodebin ! audioconvert ! audioresample"
 	videoSrc := "v4l2src device=/dev/video0 ! video/x-raw,width=640,height=360,framerate=30/1 ! videoconvert"
-	// Initialize GStreamer
-	gst.Init(nil)
-
+	var err error
 	// Prepare the configuration
 	config := webrtc.Configuration{}
-
 	// Create a new RTCPeerConnection
 	peerConnection, err := webrtc.NewPeerConnection(config)
 	if err != nil {
@@ -38,6 +42,9 @@ func (wr *Webrtc) start(b64Offer string) string {
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		fmt.Printf("Connection State has changed %s \n", connectionState.String())
+		if connectionState.String() == "disconnected" {
+			peerConnection.Close()
+		}
 	})
 
 	// Create a audio track
@@ -45,27 +52,19 @@ func (wr *Webrtc) start(b64Offer string) string {
 	if err != nil {
 		panic(err)
 	}
+
 	_, err = peerConnection.AddTrack(audioTrack)
 	if err != nil {
 		panic(err)
 	}
 
 	// Create a video track
-	firstVideoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: "video/h264"}, "video", "pion2")
-	if err != nil {
-		panic(err)
-	}
-	_, err = peerConnection.AddTrack(firstVideoTrack)
+	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: "video/h264"}, "video", "pion2")
 	if err != nil {
 		panic(err)
 	}
 
-	// Create a second video track
-	secondVideoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: "video/h264"}, "video", "pion3")
-	if err != nil {
-		panic(err)
-	}
-	_, err = peerConnection.AddTrack(secondVideoTrack)
+	_, err = peerConnection.AddTrack(videoTrack)
 	if err != nil {
 		panic(err)
 	}
@@ -99,8 +98,8 @@ func (wr *Webrtc) start(b64Offer string) string {
 	<-gatherComplete
 
 	// Start pushing buffers on these tracks
-	go wr.pipelineForCodec("opus", []*webrtc.TrackLocalStaticSample{audioTrack}, audioSrc)
-	go wr.pipelineForCodec("h264", []*webrtc.TrackLocalStaticSample{firstVideoTrack, secondVideoTrack}, videoSrc)
+	wr.pipelineForCodec("opus", []*webrtc.TrackLocalStaticSample{audioTrack}, audioSrc)
+	wr.pipelineForCodec("h264", []*webrtc.TrackLocalStaticSample{videoTrack}, videoSrc)
 
 	// Output the answer in base64 so we can paste it in browser
 	return signal.Encode(*peerConnection.LocalDescription())
@@ -112,28 +111,22 @@ func (wr *Webrtc) pipelineForCodec(codecName string, tracks []*webrtc.TrackLocal
 	var pipeline *gst.Pipeline
 	pipelineStr := "appsink name=appsink"
 	switch codecName {
-	// case "vp8":
-	// 	pipelineStr = pipelineSrc + " ! vp8enc error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 ! " + pipelineStr
-	// case "vp9":
-	// 	pipelineStr = pipelineSrc + " ! vp9enc ! " + pipelineStr
 	case "h264":
 		pipelineStr = pipelineSrc + " ! video/x-raw,format=I420 ! x264enc speed-preset=ultrafast tune=zerolatency key-int-max=20 ! video/x-h264,stream-format=byte-stream ! " + pipelineStr
 		pipeline, err = gst.NewPipelineFromString(pipelineStr)
 		if err != nil {
 			panic(err)
 		}
-		wr.H264Pipeline = pipeline
+		wr.h264Pipeline = pipeline
+
 	case "opus":
 		pipelineStr = pipelineSrc + " ! opusenc ! " + pipelineStr
 		pipeline, err = gst.NewPipelineFromString(pipelineStr)
 		if err != nil {
 			panic(err)
 		}
-		wr.OpusPipeline = pipeline
-	// case "pcmu":
-	// 	pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! mulawenc ! " + pipelineStr
-	// case "pcma":
-	// 	pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! alawenc ! " + pipelineStr
+		wr.opusPipeline = pipeline
+
 	default:
 		panic("Unhandled codec " + codecName) //nolint
 	}
@@ -147,7 +140,8 @@ func (wr *Webrtc) pipelineForCodec(codecName string, tracks []*webrtc.TrackLocal
 		panic(err)
 	}
 
-	app.SinkFromElement(appSink).SetCallbacks(&app.SinkCallbacks{
+	sink := app.SinkFromElement(appSink)
+	sink.SetCallbacks(&app.SinkCallbacks{
 		NewSampleFunc: func(sink *app.Sink) gst.FlowReturn {
 			sample := sink.PullSample()
 			if sample == nil {
@@ -174,15 +168,17 @@ func (wr *Webrtc) pipelineForCodec(codecName string, tracks []*webrtc.TrackLocal
 }
 
 func (wr *Webrtc) stop() {
-	if wr.H264Pipeline != nil {
-		wr.H264Pipeline.SetState(gst.StateNull)
-		wr.H264Pipeline.Unref()
-		wr.H264Pipeline = nil
+	log.Println("stop")
+	if wr.h264Pipeline != nil {
+		wr.h264Pipeline.SendEvent(gst.NewEOSEvent())
+		wr.h264Pipeline.SetState(gst.StateNull)
+		wr.h264Pipeline.Clear()
 	}
 
-	if wr.OpusPipeline != nil {
-		wr.OpusPipeline.SetState(gst.StateNull)
-		wr.OpusPipeline.Unref()
-		wr.OpusPipeline = nil
+	if wr.opusPipeline != nil {
+		wr.opusPipeline.SendEvent(gst.NewEOSEvent())
+		wr.opusPipeline.SetState(gst.StateNull)
+		wr.opusPipeline.Clear()
 	}
+
 }

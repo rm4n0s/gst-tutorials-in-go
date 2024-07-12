@@ -9,6 +9,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/go-gst/go-gst/gst"
 )
 
 type OfferJson struct {
@@ -38,6 +40,9 @@ func main() {
 	static := flag.String("s", path.Join(exPath, "static"), "the directory for JS and CSS files")
 	flag.Parse()
 
+	// Initialize GStreamer
+	gst.Init(nil)
+
 	mux := http.NewServeMux()
 	wr := NewWebrtc()
 	mux.Handle("/", http.FileServer(http.Dir(*static)))
@@ -49,7 +54,7 @@ func main() {
 		}
 		ioj := OfferJson{}
 		json.Unmarshal(b, &ioj)
-		log.Println("offer", ioj)
+		log.Println("received offer")
 		b64Offer := wr.start(ioj.Offer)
 
 		ooj := OfferJson{Offer: b64Offer}
