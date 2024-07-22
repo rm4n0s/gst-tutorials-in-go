@@ -12,3 +12,11 @@ build:
 	go build -o bin/fyne-webcam  examples/fyne-webcam/main.go
 	go build -o bin/webrtc-webcam  examples/webrtc-webcam/*.go
 	cp -r examples/webrtc-webcam/static bin/static
+
+	go build -o bin/record-motion-detections examples/record-motion-detections/*.go
+
+
+
+ex-recorder:
+	mkdir -p videos
+	./bin/record-motion-detections -path ./videos

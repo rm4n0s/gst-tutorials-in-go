@@ -14,11 +14,6 @@ import (
 type Webrtc struct {
 	opusPipeline *gst.Pipeline
 	h264Pipeline *gst.Pipeline
-	// peerConnection *webrtc.PeerConnection
-	// audioTrack     *webrtc.TrackLocalStaticSample
-	// videoTrack     *webrtc.TrackLocalStaticSample
-	// audioRtpSender *webrtc.RTPSender
-	// videoRtpSender *webrtc.RTPSender
 }
 
 func NewWebrtc() *Webrtc {

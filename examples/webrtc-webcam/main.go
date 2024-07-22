@@ -32,13 +32,14 @@ func sendError(w http.ResponseWriter, err error) {
 
 func main() {
 	port := flag.String("p", "8100", "port to serve on")
+	flag.Parse()
+
 	ex, err := os.Executable()
 	if err != nil {
 		panic(err)
 	}
 	exPath := filepath.Dir(ex)
 	static := flag.String("s", path.Join(exPath, "static"), "the directory for JS and CSS files")
-	flag.Parse()
 
 	// Initialize GStreamer
 	gst.Init(nil)

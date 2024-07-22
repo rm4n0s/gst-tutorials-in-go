@@ -58,4 +58,5 @@ require (
 	fyne.io/fyne/v2 v2.4.4
 	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/pion/webrtc/v3 v3.2.44
+	gocv.io/x/gocv v0.37.0
 )
