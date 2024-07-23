@@ -63,7 +63,6 @@ func pipeSrcToWindow(ctx context.Context, queueWindow chan []byte) {
 
 				// Push the buffer onto the pipeline.
 				self.PushBuffer(buffer)
-
 				i++
 			}
 		},
@@ -122,7 +121,6 @@ func pipeCamToSink(ctx context.Context, mainLoop *glib.MainLoop, rec *Recorder, 
 
 				samples := buffer.Map(gst.MapRead).Bytes()
 				defer buffer.Unmap()
-				pts := buffer.PresentationTimestamp()
 				mat, err := gocv.NewMatFromBytes(height.(int), width.(int), gocv.MatTypeCV8UC4, samples)
 				if err != nil {
 					panic(err)
@@ -152,7 +150,8 @@ func pipeCamToSink(ctx context.Context, mainLoop *glib.MainLoop, rec *Recorder, 
 				}
 
 				contours.Close()
-				log.Println(width.(int), height.(int), len(samples))
+				pts := buffer.PresentationTimestamp()
+				log.Println(width.(int), height.(int), len(samples), hasMotion, pts)
 				rec.QueueImg(samples, hasMotion, pts)
 				queueWindow <- samples
 				return gst.FlowOK

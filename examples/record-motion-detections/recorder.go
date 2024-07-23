@@ -12,7 +12,7 @@ import (
 	"github.com/go-gst/go-gst/gst/video"
 )
 
-const srcToVideo = "appsrc emit-signals=True is-live=True name=appsrc1 caps=video/x-raw,format=RGBA,width=640,height=360,framerate=30/1 ! queue max-size-buffers=4 ! videoconvert ! x264enc ! h264parse ! mp4mux !  filesink location=%s.mp4"
+const srcToVideo = "appsrc emit-signals=True is-live=True name=appsrc1 ! queue max-size-buffers=4 ! videoconvert ! x264enc ! h264parse ! qtmux !  filesink location=%s.mp4"
 
 type Img struct {
 	Data      []byte
@@ -53,6 +53,7 @@ func (r *Recorder) QueueImg(img []byte, hasMotion bool, pts gst.ClockTime) {
 }
 
 func (r *Recorder) scheduler(ctx context.Context) {
+	var pipeline *gst.Pipeline
 	for img := range r.inputQueueImgs {
 		log.Println("received input img", r.running, img.HasMotion, len(img.Data))
 		if !r.running && img.HasMotion {
@@ -61,7 +62,11 @@ func (r *Recorder) scheduler(ctx context.Context) {
 			ctx, cancel := context.WithCancel(ctx)
 			r.ctxGst = ctx
 			r.cancelGst = cancel
-			r.pipeSrcToVideo(path.Join(r.videoFolder, time.Now().Format("2006_01_02_15_04_05")))
+			if pipeline != nil {
+				pipeline.SetState(gst.StateNull)
+				pipeline = nil
+			}
+			pipeline = r.pipeSrcToVideo(path.Join(r.videoFolder, time.Now().Format("2006_01_02_15_04_05")))
 		}
 		if r.running {
 			canSend := true
@@ -86,7 +91,7 @@ func (r *Recorder) scheduler(ctx context.Context) {
 	}
 }
 
-func (r *Recorder) pipeSrcToVideo(name string) {
+func (r *Recorder) pipeSrcToVideo(name string) *gst.Pipeline {
 	p := fmt.Sprintf(srcToVideo, name)
 	log.Println("creating video ", p)
 
@@ -109,8 +114,6 @@ func (r *Recorder) pipeSrcToVideo(name string) {
 
 	src := app.SrcFromElement(appsrc)
 	src.SetCaps(videoInfo.ToCaps())
-	i := 0
-
 	src.SetCallbacks(&app.SourceCallbacks{
 		NeedDataFunc: func(self *app.Source, _ uint) {
 			select {
@@ -119,19 +122,19 @@ func (r *Recorder) pipeSrcToVideo(name string) {
 				src.EndStream()
 				return
 			case img := <-r.srcImgs:
-				log.Println("Producing video frame:", i, len(img.Data), img.HasMotion, img.PTS)
+				log.Println("Producing video frame:", len(img.Data))
 
 				buffer := gst.NewBufferWithSize(videoInfo.Size())
 				buffer.SetPresentationTimestamp(img.PTS)
-				buffer.Map(gst.MapWrite).WriteData(img.Data)
+				buffer.Map(gst.MapWrite).WriteData(img.Data[:])
 
 				buffer.Unmap()
-
-				self.PushBuffer(buffer)
-				i++
+				flow := src.PushBuffer(buffer)
+				if flow == gst.FlowError {
+					panic(flow)
+				}
 			}
-
 		},
 	})
-
+	return pipeline
 }

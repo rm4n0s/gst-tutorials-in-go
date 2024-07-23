@@ -15,7 +15,8 @@ build:
 
 	go build -o bin/record-motion-detections examples/record-motion-detections/*.go
 
-
+ex-webrtc:
+	./bin/webrtc-webcam
 
 ex-recorder:
 	mkdir -p videos
