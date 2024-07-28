@@ -14,10 +14,18 @@ build:
 	cp -r examples/webrtc-webcam/static bin/static
 
 	go build -o bin/record-motion-detections examples/record-motion-detections/*.go
+	go build -o bin/desktop-recorder examples/desktop-recorder/main.go
 
 ex-webrtc:
 	./bin/webrtc-webcam
 
-ex-recorder:
+ex-record-motion:
 	mkdir -p videos
 	./bin/record-motion-detections -path ./videos
+
+ex-record-desktop:
+	mkdir -p videos
+	./bin/desktop-recorder -out ./videos/test.mp4
+
+ex-fyne-webcam:
+	./bin/fyne-webcam
